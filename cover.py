@@ -19,15 +19,10 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.components.cover import (
     PLATFORM_SCHEMA,
-    SUPPORT_CLOSE,
-    SUPPORT_CLOSE_TILT,
-    SUPPORT_OPEN,
-    SUPPORT_OPEN_TILT,
-    SUPPORT_STOP,
     ATTR_POSITION,
     ATTR_CURRENT_POSITION,
-    SUPPORT_SET_POSITION,
     CoverEntity,
+    CoverEntityFeature,
 )
 from homeassistant.const import (
     CONF_COVERS,
@@ -61,7 +56,7 @@ from .rf_device import PyBecker
 
 _LOGGER = logging.getLogger(__name__)
 
-COVER_FEATURES = SUPPORT_OPEN | SUPPORT_CLOSE | SUPPORT_STOP
+COVER_FEATURES = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
 
 _VALID_STATES = [
     STATE_OPEN,
@@ -152,12 +147,12 @@ class BeckerEntity(CoverEntity, RestoreEntity):
         self._intermediate_pos_up = intermediate_pos_up
         self._intermediate_pos_down = intermediate_pos_down
         if not intermediate_disable:
-            self._cover_features |= SUPPORT_OPEN_TILT | SUPPORT_CLOSE_TILT
+            self._cover_features |= CoverEntityFeature.OPEN_TILT | CoverEntityFeature.CLOSE_TILT
         # Callbacks
         self._callbacks = dict()
        # Setup TravelCalculator
         if not ((travel_time_down or travel_time_up) is None or self._template is not None):
-            self._cover_features |= SUPPORT_SET_POSITION
+            self._cover_features |= CoverEntityFeature.SET_POSITION
         # Warning if both template and travelling time are set
         if (travel_time_down or travel_time_up) is not None and self._template is not None:
             _LOGGER.warning('Both "%s" and "%s" are configured for cover %s. "%s" will disable "%s"!',
@@ -166,7 +161,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
             )
         travel_time_down = travel_time_down or travel_time_up or 0
         travel_time_up = travel_time_up or travel_time_down or 0
-        if self._cover_features & SUPPORT_SET_POSITION:
+        if self._cover_features & CoverEntityFeature.SET_POSITION:
             self._attr[CONF_TRAVELLING_TIME_DOWN] = str(travel_time_down)
             self._attr[CONF_TRAVELLING_TIME_UP] = str(travel_time_up)
         self._tc = TravelCalculator(travel_time_down, travel_time_up)
@@ -249,7 +244,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
     def is_opening(self):
         """Return if the cover is opening or not."""
         action = False
-        if self._cover_features & SUPPORT_SET_POSITION:
+        if self._cover_features & CoverEntityFeature.SET_POSITION:
             action = self._tc.is_opening()
         return action
 
@@ -257,7 +252,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
     def is_closing(self):
         """Return if the cover is closing or not."""
         action = False
-        if self._cover_features & SUPPORT_SET_POSITION:
+        if self._cover_features & CoverEntityFeature.SET_POSITION:
             action = self._tc.is_closing()
         return action
 
@@ -282,7 +277,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
 
     async def async_open_cover_tilt(self, **kwargs):
         """Open the cover tilt."""
-        # Feature only available if SUPPORT_OPEN_TILT is set
+        # Feature only available if CoverEntityFeature.OPEN_TILT is set
         self._travel_up_intermediate()
         await self._becker.move_up_intermediate(self._channel)
 
@@ -293,7 +288,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
 
     async def async_close_cover_tilt(self, **kwargs):
         """Close the cover tilt."""
-        # Feature only available if SUPPORT_CLOSE_TILT is set
+        # Feature only available if CoverEntityFeature.CLOSE_TILT is set
         self._travel_down_intermediate()
         await self._becker.move_down_intermediate(self._channel)
 
@@ -304,7 +299,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
 
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position."""
-        # Feature only available if SUPPORT_SET_POSITION is set
+        # Feature only available if CoverEntityFeature.SET_POSITION is set
         if ATTR_POSITION in kwargs:
             pos = kwargs[ATTR_POSITION]
             travel_time = self._travel_to_position(pos)
@@ -333,7 +328,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
     def _travel_stop(self):
         """Stop TravelCalculator and update ha-state."""
         self._tc.stop()
-        if not (self._cover_features & SUPPORT_SET_POSITION) and self._template is None:
+        if not (self._cover_features & CoverEntityFeature.SET_POSITION) and self._template is None:
             self._tc.set_position(50)
         _LOGGER.debug("%s stopped at position %s", self.name, self.current_cover_position)
         self._update_scheduled_ha_state_callback(0)
@@ -341,7 +336,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
     def _travel_up_intermediate(self):
         pos = self.current_cover_position
         if ((pos > self._intermediate_pos_up) or
-            not (self._cover_features & SUPPORT_OPEN_TILT)):
+            not (self._cover_features & CoverEntityFeature.OPEN_TILT)):
             self._travel_to_position(OPEN_POSITION)
         else:
             self._travel_to_position(self._intermediate_pos_up)
@@ -349,7 +344,7 @@ class BeckerEntity(CoverEntity, RestoreEntity):
     def _travel_down_intermediate(self):
         pos = self.current_cover_position
         if ((pos < self._intermediate_pos_down) or
-            not (self._cover_features & SUPPORT_CLOSE_TILT)):
+            not (self._cover_features & CoverEntityFeature.CLOSE_TILT)):
             self._travel_to_position(CLOSED_POSITION)
         else:
             self._travel_to_position(self._intermediate_pos_down)
@@ -409,12 +404,12 @@ class BeckerEntity(CoverEntity, RestoreEntity):
             if command == COMMANDS['halt']:
                 self._travel_stop()
             elif ((cmd_arg == COMMANDS['up_intermediate']) and
-                  (self._cover_features & SUPPORT_OPEN_TILT)):
+                  (self._cover_features & CoverEntityFeature.OPEN_TILT)):
                 self._travel_up_intermediate()
             elif command == COMMANDS['up']:
                 self._travel_to_position(OPEN_POSITION)
             elif ((cmd_arg == COMMANDS['down_intermediate']) and
-                  (self._cover_features & SUPPORT_CLOSE_TILT)):
+                  (self._cover_features & CoverEntityFeature.CLOSE_TILT)):
                 self._travel_down_intermediate()
             elif command == COMMANDS['down']:
                 self._travel_to_position(CLOSED_POSITION)
